@@ -9,8 +9,13 @@ async def main(user_request):
     # Create MCP Server for Atla Evaluation
     async with MCPServerStdio(
         params={
-            "command": "python",
-            "args": ["atla-mcp-server.py"],
+            "command": "npx",
+            "args": [
+                "mcp-remote",
+                "http://localhost:8001/sse",
+                "--header",
+                "Authorization: Bearer ${ATLA_API_KEY}"
+            ],
             "env": {"ATLA_API_KEY": os.environ.get("ATLA_API_KEY")}
         }
     ) as atla_mcp_server:

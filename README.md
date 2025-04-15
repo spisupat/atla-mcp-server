@@ -37,6 +37,7 @@ echo $ATLA_API_KEY
 ```
 - If you are building with OpenAI agents, you will also need an `OPENAI_API_KEY` in your environment
 
+In order to setup the "remote" server locally, run `uv run atla-mcp-server.py` in a terminal. This will start the server on `http://localhost:8001/sse`.
 
 
 ## Usage
@@ -50,8 +51,13 @@ atla_api_key = os.environ.get("ATLA_API_KEY", "<your_atla_api_key>") # You can a
 
 async with MCPServerStdio(
         params={
-            "command": "python",
-            "args": ["/path/to/atla-mcp-server/atla-mcp-server.py"],
+            "command": "npx",
+            "args": [
+                "mcp-remote",
+                "http://localhost:8001/sse",
+                "--header",
+                "Authorization: Bearer ${ATLA_API_KEY}"
+            ],
             "env": {"ATLA_API_KEY":atla_api_key}
         }
     ) as atla_mcp_server:
@@ -81,12 +87,12 @@ You can also try out the notebook version of this example in `examples/agent_not
 {
 	"mcpServers": {
 		"atla-mcp-server": {
-			"command": "/path/to/uv",
+			"command": "npx",
 			"args": [
-			"--directory",
-			"/path/to/atla-mcp-server",
-			"run",
-			"atla-mcp-server.py"
+				"mcp-remote",
+				"http://localhost:8001/sse",
+				"--header",
+				"Authorization: Bearer ${ATLA_API_KEY}"
 			],
 			"env": {
 			"ATLA_API_KEY": "<your-atla-api-key>"
@@ -105,12 +111,12 @@ You can also try out the notebook version of this example in `examples/agent_not
 {
 	"mcpServers": {
 		"atla-mcp-server": {
-			"command": "/path/to/uv",
+			"command": "npx",
 			"args": [
-			"--directory",
-			"/path/to/atla-mcp-server",
-			"run",
-			"atla-mcp-server.py"
+				"mcp-remote",
+				"http://localhost:8001/sse",
+				"--header",
+				"Authorization: Bearer ${ATLA_API_KEY}"
 			],
 			"env": {
 			"ATLA_API_KEY": "<your-atla-api-key>"
