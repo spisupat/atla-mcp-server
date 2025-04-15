@@ -295,7 +295,7 @@ def get_metric_by_name(name: str, ctx=None) -> Dict[str, str]:
 app = mcp.sse_app()
 
 # Server status endpoint for health check
-@app.get("/status")
+@app.post("/status")
 async def status():
     return {"status": "ok"}
 
