@@ -5,31 +5,13 @@ from typing import Optional, List, Dict, Any
 import asyncio
 import uvicorn 
 import logging
-from fastapi import FastAPI
-from contextlib import asynccontextmanager
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize Atla clients
-atla_client = None
-atla_async_client = None
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Initialize Atla clients
-    global atla_client, atla_async_client
-    atla_client = Atla(api_key=os.environ.get("ATLA_API_KEY"))
-    atla_async_client = AsyncAtla(api_key=os.environ.get("ATLA_API_KEY"))
-    yield
-    # Clean up resources
-    await atla_async_client.close()
-    atla_client = None
-    atla_async_client = None
-
-# Create the MCP server with lifespan
-mcp = FastMCP("AtlaEvaluator", lifespan=lifespan)
+# Create the MCP server
+mcp = FastMCP("AtlaEvaluator")
 
 # Initialize Atla client
 # Note: API key will be taken from environment variable ATLA_API_KEY
