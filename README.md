@@ -1,44 +1,17 @@
 # Atla MCP Server
 An MCP server implementation that provides a standardized interface for LLMs to interact with the Atla SDK and use our [state-of-the-art evaluation models](https://www.atla-ai.com/post/selene-1).
-
-## Features
-- Evaluate individual responses with Selene 1
-- Run batch evaluations with Selene 1
-- List available evaluation metrics, create new ones or fetch them by name
-  
-## Installation
-1. Fork the repository and clone it locally in some directory. This will define your `path/to/atla-mcp-server`
+This version uses `sse` transport instead of `stdio` - this lets MCP servers talk to `localhost:8001` using the `mcp-remote` package as follows:
 ```shell
-git clone https://github.com/yourusername/atla-mcp-server.git
-cd atla-mcp-server
-pwd
-# /path/to/atla-mcp-server
+npx mcp-remote http://localhost:8001/sse --header "Authorization: Bearer $ATLA_API_KEY"
 ```
+**Steps**
+- You'll need to install this repository (including the Node [dependencies](https://www.npmjs.com/package/mcp-remote) `npm install mcp-remote`)
+- You'll need to "run" `atla-mcp-server.py` to host the server locally `uv run atla-mcp-server.py` (this is specified inside the .py using uvicorn) 
+- You can then use `localhost:8001/sse` as the URL for your server.
 
-2. Install `uv` on your system into `/path/to/uv` if you don't have it already - you can find instructions [here](https://docs.astral.sh/uv/getting-started/installation/). For instance on MacOS:
-```shell
-brew install uv
-which uv
-# /path/to/uv
-```
-
-3. Install requirements into a virtual environment in `/path/to/atla-mcp-server`
-```shell
-uv venv
-uv sync
-```
-
-4. Add your `ATLA_API_KEY` into your environment - you can find yours [here](https://www.atla-ai.com/sign-in). For instance on MacOS:
-```shell
-export ATLA_API_KEY=<your-atla-api-key> >> ~/.zshrc
-source ~/.zshrc
-echo $ATLA_API_KEY
-# <your-atla-api-key>
 ```
 - If you are building with OpenAI agents, you will also need an `OPENAI_API_KEY` in your environment
-
-In order to setup the "remote" server locally, run `uv run atla-mcp-server.py` in a terminal. This will start the server on `http://localhost:8001/sse`.
-
+```
 
 ## Usage
 ### Use with OpenAI Agents SDK
@@ -52,12 +25,12 @@ atla_api_key = os.environ.get("ATLA_API_KEY", "<your_atla_api_key>") # You can a
 async with MCPServerStdio(
         params={
             "command": "npx",
-            "args": [
-                "mcp-remote",
-                "http://localhost:8001/sse",
-                "--header",
-                "Authorization: Bearer ${ATLA_API_KEY}"
-            ],
+			"args": [
+				"mcp-remote",
+				"http://localhost:8001/sse",
+				"--header",
+				"Authorization: Bearer ${ATLA_API_KEY}"
+			],
             "env": {"ATLA_API_KEY":atla_api_key}
         }
     ) as atla_mcp_server:
