@@ -1,20 +1,61 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Context
 import os
 from atla import AsyncAtla, Atla
 from typing import Optional, List, Dict, Any
 import asyncio
 import uvicorn 
 import logging
+from anyio.streams.memory import BrokenResourceError
+from contextlib import asynccontextmanager
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Session management class
+class SseSessionManager:
+    def __init__(self):
+        self._sessions = {}
+        self._lock = asyncio.Lock()
+    
+    async def create_session(self, session_id: str):
+        async with self._lock:
+            if session_id in self._sessions:
+                await self.cleanup_session(session_id)
+            self._sessions[session_id] = {
+                'initialized': False
+            }
+    
+    async def mark_initialized(self, session_id: str):
+        async with self._lock:
+            if session_id in self._sessions:
+                self._sessions[session_id]['initialized'] = True
+
+    async def get_session(self, session_id: str):
+        async with self._lock:
+            return self._sessions.get(session_id)
+
+    async def cleanup_session(self, session_id: str):
+        async with self._lock:
+            if session_id in self._sessions:
+                del self._sessions[session_id]
+                logger.info(f"Cleaned up session {session_id}")
+
 # Create the MCP server
-mcp = FastMCP("AtlaEvaluator")
+session_manager = SseSessionManager()
+
+@asynccontextmanager
+async def server_lifespan(server: FastMCP):
+    try:
+        yield
+    finally:
+        # Cleanup sessions on shutdown
+        for session_id in list(session_manager._sessions.keys()):
+            await session_manager.cleanup_session(session_id)
+
+mcp = FastMCP("AtlaEvaluator", lifespan=server_lifespan)
 
 # Initialize Atla client
-# Note: API key will be taken from environment variable ATLA_API_KEY
 atla_client = Atla(api_key=os.environ.get("ATLA_API_KEY"))
 atla_async_client = AsyncAtla(api_key=os.environ.get("ATLA_API_KEY"))
 
@@ -175,10 +216,16 @@ def get_metric_by_name(name: str) -> Dict[str, str]:
         raise ValueError(f"Metric with name '{name}' not found.")
     return metric
 
-# Create an ASGI app for SSE transport instead of stdio
+# Use FastMCP's built-in SSE implementation
 app = mcp.sse_app()
 
 if __name__ == "__main__":
     logger.info("Starting Atla MCP server...")
     port = int(os.environ.get("PORT", 8001))
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="debug")
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        log_level="info",
+        timeout_keep_alive=60
+    )
