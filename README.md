@@ -6,7 +6,7 @@ npx mcp-remote http://localhost:8001/sse --header "Authorization: Bearer $ATLA_A
 ```
 **Steps**
 - You'll need to install this repository (including the Node [dependencies](https://www.npmjs.com/package/mcp-remote) `pip install -e . && npm install`)
-- You'll need to "run" `atla-mcp-server.py` to host the server locally `python run src/atla-mcp-server.py` (this is specified inside the .py using uvicorn) 
+- You'll need to "run" `atla-mcp-server.py` to host the server locally `python run atla-mcp-server.py` (this is specified inside the .py using uvicorn) 
 - You can then use `localhost:8001/sse` as the URL for your server.
 
 ```
