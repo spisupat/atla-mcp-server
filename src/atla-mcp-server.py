@@ -1,11 +1,14 @@
+# src/atla_evaluator.py
 from mcp.server.fastmcp import FastMCP
 import os
 from atla import AsyncAtla, Atla
 from typing import Optional, List, Dict, Any
 import asyncio
-import uvicorn 
 import logging
-from starlette.middleware.cors import CORSMiddleware
+from starlette.applications import Starlette
+from starlette.routing import Mount
+import uvicorn
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,8 +18,12 @@ mcp = FastMCP("AtlaEvaluator")
 
 # Initialize Atla client
 # Note: API key will be taken from environment variable ATLA_API_KEY
-atla_client = Atla(api_key=os.environ.get("ATLA_API_KEY"))
-atla_async_client = AsyncAtla(api_key=os.environ.get("ATLA_API_KEY"))
+atla_api_key = os.environ.get("ATLA_API_KEY")
+if not atla_api_key:
+    logger.warning("ATLA_API_KEY environment variable not set! The server will fail when trying to evaluate.")
+
+atla_client = Atla(api_key=atla_api_key)
+atla_async_client = AsyncAtla(api_key=atla_api_key)
 
 @mcp.tool()
 async def evaluate_response(
@@ -46,20 +53,28 @@ async def evaluate_response(
             - "score": The numerical evaluation score assigned by the Atla model.
             - "critique": A textual explanation or critique of the evaluation.
     """
-    result = await atla_async_client.evaluation.create(
-        model_id=model_id,
-        model_input=model_input,
-        model_output=model_output,
-        evaluation_criteria=evaluation_criteria,
-        expected_model_output=expected_model_output,
-        few_shot_examples=[],
-        model_context=model_context,
-    )
-    
-    return {
-        "score": result.result.evaluation.score,
-        "critique": result.result.evaluation.critique,
-    }
+    try:
+        result = await atla_async_client.evaluation.create(
+            model_id=model_id,
+            model_input=model_input,
+            model_output=model_output,
+            evaluation_criteria=evaluation_criteria,
+            expected_model_output=expected_model_output,
+            few_shot_examples=[],
+            model_context=model_context,
+        )
+        
+        return {
+            "score": result.result.evaluation.score,
+            "critique": result.result.evaluation.critique,
+        }
+    except Exception as e:
+        logger.error(f"Error evaluating response: {str(e)}")
+        return {
+            "error": str(e),
+            "score": "N/A",
+            "critique": "Evaluation failed"
+        }
 
 @mcp.tool()
 async def batch_evaluate_responses(evaluations: List[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -100,8 +115,12 @@ def list_metrics() -> List[Dict[str, str]]:
             - "name": The name of the metric.
             - "description": A brief description of what the metric measures or evaluates.
     """
-    metrics = atla_client.metrics.list().metrics
-    return [{"name": m.name, "description": m.description} for m in metrics]
+    try:
+        metrics = atla_client.metrics.list().metrics
+        return [{"name": m.name, "description": m.description} for m in metrics]
+    except Exception as e:
+        logger.error(f"Error listing metrics: {str(e)}")
+        return [{"error": str(e)}]
 
 @mcp.tool()
 def create_metric(
@@ -125,27 +144,31 @@ def create_metric(
     Returns:
         str: The unique identifier (ID) of the newly created metric.
     """
-    # Step 1: Create the metric
-    result = atla_client.metrics.create(
-        name=name,
-        metric_type=metric_type,
-        description=description
-    )
-    metric_id = result.metric_id
+    try:
+        # Step 1: Create the metric
+        result = atla_client.metrics.create(
+            name=name,
+            metric_type=metric_type,
+            description=description
+        )
+        metric_id = result.metric_id
 
-    # Step 2: Add a prompt
-    atla_client.metrics.prompts.create(
-        metric_id=metric_id,
-        content=prompt
-    )
+        # Step 2: Add a prompt
+        atla_client.metrics.prompts.create(
+            metric_id=metric_id,
+            content=prompt
+        )
 
-    # Step 3: Set the prompt version
-    atla_client.metrics.prompts.set_active_prompt_version(
-        metric_id=metric_id,
-        version=1
-    )
+        # Step 3: Set the prompt version
+        atla_client.metrics.prompts.set_active_prompt_version(
+            metric_id=metric_id,
+            version=1
+        )
 
-    return metric_id
+        return metric_id
+    except Exception as e:
+        logger.error(f"Error creating metric: {str(e)}")
+        return f"Error: {str(e)}"
 
 @mcp.tool()
 def get_metric_by_name(name: str) -> Dict[str, str]:
@@ -167,29 +190,34 @@ def get_metric_by_name(name: str) -> Dict[str, str]:
     Raises:
         ValueError: If a metric with the given name is not found.
     """
-    # 1. Get the list of metrics and check if the metric exists
-    metrics = list_metrics()
-    metric = next((m for m in metrics if m["name"] == name), None)
-    if not metric:
-        raise ValueError(f"Metric with name '{name}' not found.")
-    return metric
+    try:
+        # 1. Get the list of metrics and check if the metric exists
+        metrics = list_metrics()
+        if "error" in metrics[0]:
+            return {"error": metrics[0]["error"]}
+            
+        metric = next((m for m in metrics if m["name"] == name), None)
+        if not metric:
+            return {"error": f"Metric with name '{name}' not found"}
+        return metric
+    except Exception as e:
+        logger.error(f"Error getting metric: {str(e)}")
+        return {"error": str(e)}
 
-# Create an ASGI app for SSE transport instead of stdio
-app = mcp.sse_app()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # For production, restrict to specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# Create an ASGI app for SSE transport (Starlette-based routing)
+app = Starlette(
+    routes=[
+        Mount('/', app=mcp.sse_app()),
+    ]
 )
+
+# For direct running with uvicorn
 if __name__ == "__main__":
-    logger.info("Starting Atla MCP server...")
+    port = int(os.environ.get("PORT", 8000))
+    logger.info(f"Starting Atla MCP server on port {port}...")
     uvicorn.run(
         app, 
         host="0.0.0.0", 
-        port=8001, 
-        log_level="debug",
-        # Keep-alive settings
-        timeout_keep_alive=120,    #
-        )
+        port=port, 
+        log_level="info",
+    )
