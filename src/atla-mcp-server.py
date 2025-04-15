@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any
 import asyncio
 import uvicorn 
 import logging
-
+from starlette.middleware.cors import CORSMiddleware
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -176,7 +176,20 @@ def get_metric_by_name(name: str) -> Dict[str, str]:
 
 # Create an ASGI app for SSE transport instead of stdio
 app = mcp.sse_app()
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For production, restrict to specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 if __name__ == "__main__":
     logger.info("Starting Atla MCP server...")
-    uvicorn.run(app, host="0.0.0.0", port=8001, log_level="debug")
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=8001, 
+        log_level="debug",
+        # Keep-alive settings
+        timeout_keep_alive=120,    #
+        log_level="debug")
